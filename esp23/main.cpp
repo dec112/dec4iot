@@ -89,8 +89,8 @@ typedef struct s_device {
 /******************************************************************* GLOBALS */
 
 // adjust this part if necessary
-const char *ssid = "TPLink-290818";
-const char *password = "82452506";
+const char *ssid = "xxx";
+const char *password = "xxx";
 const char *serverName = "https://dec4iot.data-container.net/api/data";
 const char *ntpServer = "pool.ntp.org";
 
