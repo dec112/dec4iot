@@ -437,68 +437,58 @@ void json_send(s_device *dev, s_data *mydata) {
 
   jsonb_init(&b);
   {
-    jsonb_object(&b, buf, ELEMENT_SIZE);
-    jsonb_key(&b, buf, ELEMENT_SIZE, "data", strlen("data"));
+    jsonb_array(&b, buf, ELEMENT_SIZE);
     {
-      jsonb_object(&b, buf, ELEMENT_SIZE);
-      jsonb_key(&b, buf, ELEMENT_SIZE, "content", strlen("content"));
       {
-        jsonb_array(&b, buf, ELEMENT_SIZE);
-        {
-          {
-            jsonb_object(&b, buf, ELEMENT_SIZE);
-            jsonb_key(&b, buf, ELEMENT_SIZE, "bn", strlen("bn"));
-            jsonb_string(&b, buf, ELEMENT_SIZE, urn, strlen(urn));
-            jsonb_key(&b, buf, ELEMENT_SIZE, "bt", strlen("bt"));
-            jsonb_float(&b, buf, ELEMENT_SIZE, mydata->tm);
-            jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
-            jsonb_string(&b, buf, ELEMENT_SIZE, "batt", strlen("batt"));
-            jsonb_key(&b, buf, ELEMENT_SIZE, "u", strlen("u"));
-            jsonb_string(&b, buf, ELEMENT_SIZE, "%EL", strlen("%EL"));
-            jsonb_key(&b, buf, ELEMENT_SIZE, "v", strlen("v"));
-            jsonb_number(&b, buf, ELEMENT_SIZE, mydata->bat);
-            jsonb_object_pop(&b, buf, ELEMENT_SIZE);
-          }
-          {
-            jsonb_object(&b, buf, ELEMENT_SIZE);
-            jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
-            jsonb_string(&b, buf, ELEMENT_SIZE, "label", strlen("label"));
-            jsonb_key(&b, buf, ELEMENT_SIZE, "vs", strlen("vs"));
-            jsonb_string(&b, buf, ELEMENT_SIZE, DEV_LABEL, strlen(DEV_LABEL));
-            jsonb_object_pop(&b, buf, ELEMENT_SIZE);
-          }
-          {
-            jsonb_object(&b, buf, ELEMENT_SIZE);
-            jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
-            jsonb_string(&b, buf, ELEMENT_SIZE, "temp", strlen("temp"));
-            jsonb_key(&b, buf, ELEMENT_SIZE, "u", strlen("u"));
-            jsonb_string(&b, buf, ELEMENT_SIZE, "Cel", strlen("Cel"));
-            jsonb_key(&b, buf, ELEMENT_SIZE, "v", strlen("v"));
-            jsonb_number(&b, buf, ELEMENT_SIZE, mydata->temp);
-            jsonb_object_pop(&b, buf, ELEMENT_SIZE);
-          }
-          {
-            jsonb_object(&b, buf, ELEMENT_SIZE);
-            jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
-            jsonb_string(&b, buf, ELEMENT_SIZE, "move", strlen("move"));
-            jsonb_key(&b, buf, ELEMENT_SIZE, "vb", strlen("vb"));
-            jsonb_bool(&b, buf, ELEMENT_SIZE, mydata->mov);
-            jsonb_object_pop(&b, buf, ELEMENT_SIZE);
-          }
-          {
-            jsonb_object(&b, buf, ELEMENT_SIZE);
-            jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
-            jsonb_string(&b, buf, ELEMENT_SIZE, "button", strlen("button"));
-            jsonb_key(&b, buf, ELEMENT_SIZE, "vb", strlen("vb"));
-            jsonb_bool(&b, buf, ELEMENT_SIZE, mydata->btn);
-            jsonb_object_pop(&b, buf, ELEMENT_SIZE);
-          }
-        }
-        jsonb_array_pop(&b, buf, ELEMENT_SIZE);
+        jsonb_object(&b, buf, ELEMENT_SIZE);
+        jsonb_key(&b, buf, ELEMENT_SIZE, "bn", strlen("bn"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, urn, strlen(urn));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "bt", strlen("bt"));
+        jsonb_float(&b, buf, ELEMENT_SIZE, mydata->tm);
+        jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "batt", strlen("batt"));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "u", strlen("u"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "%EL", strlen("%EL"));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "v", strlen("v"));
+        jsonb_number(&b, buf, ELEMENT_SIZE, mydata->bat);
+        jsonb_object_pop(&b, buf, ELEMENT_SIZE);
       }
-      jsonb_object_pop(&b, buf, ELEMENT_SIZE);
+      {
+        jsonb_object(&b, buf, ELEMENT_SIZE);
+        jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "label", strlen("label"));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "vs", strlen("vs"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, DEV_LABEL, strlen(DEV_LABEL));
+        jsonb_object_pop(&b, buf, ELEMENT_SIZE);
+      }
+      {
+        jsonb_object(&b, buf, ELEMENT_SIZE);
+        jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "temp", strlen("temp"));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "u", strlen("u"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "Cel", strlen("Cel"));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "v", strlen("v"));
+        jsonb_number(&b, buf, ELEMENT_SIZE, mydata->temp);
+        jsonb_object_pop(&b, buf, ELEMENT_SIZE);
+      }
+      {
+        jsonb_object(&b, buf, ELEMENT_SIZE);
+        jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "move", strlen("move"));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "vb", strlen("vb"));
+        jsonb_bool(&b, buf, ELEMENT_SIZE, mydata->mov);
+        jsonb_object_pop(&b, buf, ELEMENT_SIZE);
+      }
+      {
+        jsonb_object(&b, buf, ELEMENT_SIZE);
+        jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "button", strlen("button"));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "vb", strlen("vb"));
+        jsonb_bool(&b, buf, ELEMENT_SIZE, mydata->btn);
+        jsonb_object_pop(&b, buf, ELEMENT_SIZE);
+      }
     }
-    jsonb_object_pop(&b, buf, ELEMENT_SIZE);
+    jsonb_array_pop(&b, buf, ELEMENT_SIZE);
   }
   Serial.printf("JSON:%s\n", buf);
   if (WiFi.status() == WL_CONNECTED) {
