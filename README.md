@@ -1,7 +1,6 @@
 # dec4iot
 
 ## **Downloading this project**
-___
 
 **To clone this project with submodules:**
 ```
