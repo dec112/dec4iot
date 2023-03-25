@@ -1,0 +1,3 @@
+[submodule "onboarding-android"]
+	path = onboarding-android
+	url = https://github.com/jkampich1411/dec4iot-onboarding-android
