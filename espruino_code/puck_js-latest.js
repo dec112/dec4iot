@@ -200,7 +200,7 @@ const getSensorFuns = {
 const BleNumbers = {    // Assigned numbers from the BLE spec https://btprodspecificationrefs.blob.core.windows.net/assigned-numbers/Assigned%20Number%20Types/Assigned_Numbers.pdf
   "battery": 0x2A19,
   "button": 0x2AE2,
-  "movement": 0x2AE2,
+  "movement": 0x2C01,
   "temperature": 0x2A6E,
 };
 
