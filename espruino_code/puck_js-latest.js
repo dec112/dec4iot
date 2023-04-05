@@ -14,8 +14,8 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
-    You should NOT have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/> or <choosealicense.com/licenses/gpl-3.0/>.
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see <https://www.gnu.org/licenses/> or <choosealicense.com/licenses/gpl-3.0/>.
 **/
 
 const storage = require('Storage');
