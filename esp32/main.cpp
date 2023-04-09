@@ -32,6 +32,7 @@
 #include <Arduino.h>
 #include <BLEDevice.h>
 #include <HTTPClient.h>
+#include <esp_task_wdt.h>
 #include <WiFi.h>
 
 #include "json.h"
@@ -40,14 +41,18 @@
 /******************************************************************* DEFINE */
 
 #define ELEMENT_SIZE 512
+#define DATA_SIZE 64
 #define URN_SIZE 48
 #define MAC_SIZE 24
+#define LOC_SIZE 12
 #define MAX_DEVICE 4
 #define MAX_POOL 10
+#define MAX_REDIR 8
 #define NO_INDEX -1
 
+#define WDT_TIMEOUT 600
+
 // adjust this part if necessary
-#define DEV_LABEL "DEC112 PuckJS"
 #define DEV_NAME "DEC112-BLE-Client"
 #define MAC_1 "68:72:c3:eb:8e:a9"
 #define MAC_2 "d6:ea:13:f5:11:3b"
@@ -76,7 +81,8 @@ typedef struct s_device {
   int state;
   int index;
   char mac[MAC_SIZE];
-  char label[64];
+  char id[DATA_SIZE];
+  char url[DATA_SIZE];
   BLEAdvertisedDevice *pDevice;
   BLEClient *pClient;
   BLERemoteCharacteristic *tempCharacteristic;
@@ -86,19 +92,28 @@ typedef struct s_device {
   s_data data[MAX_POOL];
 } s_device;
 
+typedef struct {
+    char lat[LOC_SIZE];
+    char lon[LOC_SIZE];
+    int accuracy = 40000;
+} location_t;
+
 /******************************************************************* GLOBALS */
 
 // adjust this part if necessary
-const char *ssid = "xxx";
-const char *password = "xxx";
-const char *serverName = "https://dec4iot.data-container.net/api/data";
+const char *ssid = "xxxxxx";
+const char *password = "xxxxxx";
 const char *ntpServer = "pool.ntp.org";
+
+const char* mozillaApi = "https://location.services.mozilla.com/v1/geolocate?key=test";
 
 const long gmtOffset_sec = GMT_OFF_SEC;
 const int daylightOffset_sec = DLT_OFF_SEC;
 
 char myMacs[MAX_DEVICE][MAC_SIZE] = {MAC_1, MAC_2, MAC_3, MAC_4};
 
+
+static location_t location;
 static s_device myDev[MAX_DEVICE];
 static boolean doScan = false;
 static WiFiClientSecure *client;
@@ -110,7 +125,7 @@ static BLEUUID serviceUUID("34defd2c-c8fe-b18e-9a70-591970cba32b");
 
 // BLE Characteristics
 // Temperature Celsius Characteristic
-static BLEUUID tempCharacteristicUUID("2c02");
+static BLEUUID tempCharacteristicUUID("2a6e");
 // Battery Characteristic
 static BLEUUID batCharacteristicUUID("2a19");
 // Button Characteristic
@@ -119,6 +134,98 @@ static BLEUUID btnCharacteristicUUID("2ae2");
 static BLEUUID movCharacteristicUUID("2c01");
 
 /***************************************************************** FUNCTIONS */
+
+/// @brief  converts MAC address to string
+/// @return string
+String mac_to_string(uint8_t* macAddress) {
+  char macStr[18] = { 0 };
+  sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", macAddress[0], macAddress[1], macAddress[2], macAddress[3], macAddress[4], macAddress[5]);
+
+  return  String(macStr);
+}
+
+/// @brief  looks for surrounding SSIDs
+/// @return JSON including WiFi information
+String get_surrounding_wifi_json() {
+  String wifiArray = "[\n";
+  int8_t numWifi = WiFi.scanNetworks();
+
+  for (uint8_t i = 0; i < numWifi; i++) {//numWifi; i++) {
+    wifiArray += "{\"macAddress\":\"" + mac_to_string(WiFi.BSSID(i)) + "\",";
+    wifiArray += "\"signalStrength\":" + String(WiFi.RSSI(i)) + ",";
+    wifiArray += "\"channel\":" + String(WiFi.channel(i)) + "}";
+    if (i < (numWifi - 1)) {
+      wifiArray += ",\n";
+    }
+  }
+  WiFi.scanDelete();
+  wifiArray += "]";
+
+  return wifiArray;
+}
+
+/// @brief  gets location via Mozilla API
+/// @return location object
+location_t get_location() {
+  location_t location;
+
+  if (WiFi.status() == WL_CONNECTED) {
+
+    client->setInsecure();
+
+    http.begin(*client, mozillaApi);
+
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("User-Agent", "ESP32");
+
+    String body = "{\"wifiAccessPoints\":" + get_surrounding_wifi_json() + "}";
+
+    Serial.printf("JSON:%s\n", body.c_str());
+
+    int httpResponseCode = http.POST(body);
+    Serial.print("HTTP Response code: ");
+    Serial.println(httpResponseCode);
+
+    // httpCode will be negative on error
+    if (httpResponseCode > 0) {
+      if (httpResponseCode == HTTP_CODE_OK) {
+        String response = http.getString();
+        Serial.println(response);
+
+        int index = response.indexOf("\"lat\":");
+        if (index != -1) {
+          String tempStr = response.substring(index);
+          tempStr = tempStr.substring(tempStr.indexOf(":") + 1, tempStr.indexOf(","));
+          snprintf(location.lat, LOC_SIZE, "%s", tempStr);
+          Serial.printf("Lat: %s\n", location.lat);
+        }
+
+        index = response.indexOf("\"lng\":");
+        if (index != -1) {
+          String tempStr = response.substring(index);
+          tempStr = tempStr.substring(tempStr.indexOf(":") + 1, tempStr.indexOf("}"));
+          snprintf(location.lon, LOC_SIZE, "%s", tempStr);
+          Serial.printf("Lon: %s\n", location.lon);
+        }
+
+        index = response.indexOf("\"accuracy\":");
+        if (index != -1) {
+          String tempStr = response.substring(index);
+          tempStr = tempStr.substring(tempStr.indexOf(":") + 1, tempStr.indexOf("\n"));
+          location.accuracy = tempStr.toFloat();
+          Serial.println("Accuracy: " + String(location.accuracy) + "\n");
+        }
+      }
+    } else {
+      Serial.printf("[HTTPS] POST... failed, error: %s\n", http.errorToString(httpResponseCode).c_str());
+    }
+
+    // Free resources
+    http.end();
+    client->stop();
+  }
+  return location;
+}
 
 /// @brief  resets device data
 /// @return
@@ -225,16 +332,72 @@ void set_data_btn(s_data *d, int val) {
   return;
 }
 
-/// @brief  stores label string to dataset
+/// @brief  stores id string to dataset
 /// @return
-void set_data_label(s_device *d, char *label) {
-  if (label == NULL) {
+void set_data_id(s_device *d, char *id) {
+  if (id == NULL) {
     return;
   }
-  if (strlen(label) > ELEMENT_SIZE - 1) {
+  if (strlen(id) > DATA_SIZE - 1) {
     return;
   }
-  sprintf(d->label, "%s", label);
+  sprintf(d->id, "%s", id);
+
+  return;
+}
+
+/// @brief  stores url string to dataset
+/// @return
+void set_data_url(s_device *d, char *url) {
+  if (url == NULL) {
+    return;
+  }
+  if (strlen(url) > DATA_SIZE - 1) {
+    return;
+  }
+  sprintf(d->url, "%s", url);
+
+  return;
+}
+
+/// @brief  stores url and id string to dataset
+/// @return
+void set_characteristic(s_device *d, const char *s) {
+  size_t len, base = 0;
+
+  if (s == NULL) {
+    return;
+  }
+  if ((strlen(s) > DATA_SIZE - 1) || (strlen(s) < 5)) {
+    return;
+  }
+
+  char *tmp = (char *)s;
+  int i = 0;
+
+  while(1) {
+    if ((tmp[i + 0] == 'i') && (tmp[i + 1] == '=')) {
+      base = i + 2;
+    }
+    if (tmp[i] == ';') {
+      len = i - base;
+      break;
+    }
+    i++;
+    if (i > DATA_SIZE) {
+      *d->id = '\0';
+      *d->url = '\0';
+      return;
+    }
+  }
+
+  tmp = (char *)s + base;
+  snprintf(d->id, len + 1, "%s", tmp);
+
+  tmp = (char *)s + base + len + 3;
+  len = strlen(s) - len;
+
+  snprintf(d->url, len, "https://%s", tmp);
 
   return;
 }
@@ -409,7 +572,7 @@ void start_wifi() {
 
 /// @brief gets local epoch time
 /// @return time_t struct
-unsigned long Get_Epoch_Time() {
+unsigned long get_epoch_time() {
   time_t now;
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
@@ -422,7 +585,7 @@ unsigned long Get_Epoch_Time() {
 
 /// @brief sends a SenML JSON object to a webservice
 /// @return
-void json_send(s_device *dev, s_data *mydata) {
+void send_json(s_device *dev, s_data *mydata) {
   jsonb b;
   jsonbcode ret;
 
@@ -456,9 +619,25 @@ void json_send(s_device *dev, s_data *mydata) {
       {
         jsonb_object(&b, buf, ELEMENT_SIZE);
         jsonb_key(&b, buf, ELEMENT_SIZE, "n", strlen("n"));
-        jsonb_string(&b, buf, ELEMENT_SIZE, "label", strlen("label"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "id", strlen("id"));
         jsonb_key(&b, buf, ELEMENT_SIZE, "vs", strlen("vs"));
-        jsonb_string(&b, buf, ELEMENT_SIZE, DEV_LABEL, strlen(DEV_LABEL));
+        jsonb_string(&b, buf, ELEMENT_SIZE, dev->id, strlen(dev->id));
+        jsonb_object_pop(&b, buf, ELEMENT_SIZE);
+      }
+      {
+        jsonb_object(&b, buf, ELEMENT_SIZE);
+        jsonb_key(&b, buf, ELEMENT_SIZE, "u", strlen("u"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "lat", strlen("lat"));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "v", strlen("v"));
+        jsonb_number(&b, buf, ELEMENT_SIZE, strtod(location.lat, NULL));
+        jsonb_object_pop(&b, buf, ELEMENT_SIZE);
+      }
+      {
+        jsonb_object(&b, buf, ELEMENT_SIZE);
+        jsonb_key(&b, buf, ELEMENT_SIZE, "u", strlen("u"));
+        jsonb_string(&b, buf, ELEMENT_SIZE, "lon", strlen("lon"));
+        jsonb_key(&b, buf, ELEMENT_SIZE, "v", strlen("v"));
+        jsonb_number(&b, buf, ELEMENT_SIZE, strtod(location.lon, NULL));
         jsonb_object_pop(&b, buf, ELEMENT_SIZE);
       }
       {
@@ -492,22 +671,45 @@ void json_send(s_device *dev, s_data *mydata) {
   }
   Serial.printf("JSON:%s\n", buf);
   if (WiFi.status() == WL_CONNECTED) {
+    char *url = dev->url;
+    const char *headerKeys[] = {"Location"};
+    const size_t headerKeysCount = sizeof(headerKeys) / sizeof(headerKeys[0]);
+    String httpRequestData = buf;
+    int httpResponseCode;
+    int j = 0;
 
     client->setInsecure();
+    while(1) {
+      http.collectHeaders(headerKeys, headerKeysCount);
+      http.begin(*client, url);
 
-    http.begin(*client, serverName);
+      http.addHeader("Content-Type", "application/json");
+      http.addHeader("User-Agent", "ESP32");
+   
+      httpResponseCode = http.POST(httpRequestData);
+      Serial.print("HTTP Response code: ");
+      Serial.println(httpResponseCode);
 
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("User-Agent", "ESP32");
+      if (httpResponseCode == HTTP_CODE_MOVED_PERMANENTLY) {
+        url = (char*)http.header("Location").c_str();
+        Serial.print("HTTP Location header: ");
+        Serial.println(url);
+      }
+      // Free resources
+      http.end();
+      client->stop();
+      j++;
 
-    String httpRequestData = buf;
-    int httpResponseCode = http.POST(httpRequestData);
-    Serial.print("HTTP Response code: ");
-    Serial.println(httpResponseCode);
+      // restart in case heap memory is low
+      if (httpResponseCode == -1) {
+        ESP.restart();
+        break;
+      }
 
-    // Free resources
-    http.end();
-    client->stop();
+      if ((httpResponseCode == HTTP_CODE_OK) || (j == MAX_REDIR))  {
+        break;
+      }
+    }
   }
 }
 
@@ -518,7 +720,7 @@ notifyBatteryCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic,
                       BLEAddress BLEAddr, uint8_t *pData, size_t length,
                       bool isNotify) {
   BLEDevice::getScan()->stop();
-  long double ts = (long double)Get_Epoch_Time();
+  long double ts = (long double)get_epoch_time();
   int i = index_by_mac(BLEAddr.toString().c_str());
   int j = next_index(&myDev[i], ts);
   int val = (int)(*pData);
@@ -535,7 +737,7 @@ notifyTemperatureCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic,
                           BLEAddress BLEAddr, uint8_t *pData, size_t length,
                           bool isNotify) {
   BLEDevice::getScan()->stop();
-  long double ts = (long double)Get_Epoch_Time();
+  long double ts = (long double)get_epoch_time();
   int i = index_by_mac(BLEAddr.toString().c_str());
   int j = next_index(&myDev[i], ts);
   int val = (int)(*pData);
@@ -551,7 +753,7 @@ notifyMovementCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic,
                        BLEAddress BLEAddr, uint8_t *pData, size_t length,
                        bool isNotify) {
   BLEDevice::getScan()->stop();
-  long double ts = (long double)Get_Epoch_Time();
+  long double ts = (long double)get_epoch_time();
   int i = index_by_mac(BLEAddr.toString().c_str());
   int j = next_index(&myDev[i], ts);
   int val = (int)(*pData);
@@ -568,7 +770,7 @@ notifyButtonCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic,
                      BLEAddress BLEAddr, uint8_t *pData, size_t length,
                      bool isNotify) {
   BLEDevice::getScan()->stop();
-  long double ts = (long double)Get_Epoch_Time();
+  long double ts = (long double)get_epoch_time();
   int i = index_by_mac(BLEAddr.toString().c_str());
   int j = next_index(&myDev[i], ts);
   int val = (int)(*pData);
@@ -639,6 +841,17 @@ void connectToServer() {
       continue;
     }
     Serial.println(" - found service");
+
+    // Read the value of the characteristic.
+    BLERemoteCharacteristic *pRemoteCharacteristic = pRemoteService->getCharacteristic(serviceUUID);
+    if(pRemoteCharacteristic->canRead()) {
+      std::string value = pRemoteCharacteristic->readValue();
+      Serial.print(" - characteristic value is: ");
+      Serial.println(value.c_str());
+      set_characteristic(&myDev[i], value.c_str());
+      Serial.printf(" --  id: %s\n", myDev[i].id);
+      Serial.printf(" -- url: %s\n", myDev[i].url);
+    }
 
     // obtain references to the characteristics in the service ...
     // battery characteristic characteristic
@@ -748,7 +961,14 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
 /// @return
 void setup() {
   Serial.begin(115200);
-  Serial.printf("TIME [%.9e] HEAP [%lu] ", (long double)Get_Epoch_Time(),
+
+  // Watchdog Konfiguration
+  //Serial.println("configuring WatchDogTimer ...");
+
+  //esp_task_wdt_init(WDT_TIMEOUT, true);        
+  //esp_task_wdt_add(NULL);
+
+  Serial.printf("TIME [%.9e] HEAP [%lu] ", (long double)get_epoch_time(),
                 (unsigned long)ESP.getFreeHeap());
   Serial.println("starting Arduino BLE Client application...");
 
@@ -757,10 +977,12 @@ void setup() {
   client = new WiFiClientSecure;
   client->setInsecure();
 
+  location = get_location();
+
   delay(4000);
   reset_devices();
 
-  Serial.printf("TIME [%.9e] HEAP [%lu]\n", (long double)Get_Epoch_Time(),
+  Serial.printf("TIME [%.9e] HEAP [%lu]\n", (long double)get_epoch_time(),
                 (unsigned long)ESP.getFreeHeap());
 
   BLEDevice::init(DEV_NAME);
@@ -793,7 +1015,7 @@ void loop() {
         if (check_data(d)) {
           Serial.printf("TIME [%.9e] HEAP [%lu]\n", d->tm,
                         (unsigned long)ESP.getFreeHeap());
-          json_send(&myDev[i], d);
+          send_json(&myDev[i], d);
           reset_data(d);
         }
       }
@@ -809,4 +1031,5 @@ void loop() {
 
   // delay between loops
   delay(1000);
+  //esp_task_wdt_reset();
 }
