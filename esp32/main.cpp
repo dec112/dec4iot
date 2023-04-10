@@ -102,8 +102,8 @@ typedef struct {
 /******************************************************************* GLOBALS */
 
 // adjust this part if necessary
-const char *ssid = "TPLink-290818";
-const char *password = "82452506";
+const char *ssid = "xxxxxx";
+const char *password = "xxxxxx";
 const char *ntpServer = "pool.ntp.org";
 
 const char* mozillaApi = "https://location.services.mozilla.com/v1/geolocate?key=test";
@@ -697,6 +697,10 @@ void send_json(s_device *dev, s_data *mydata) {
         Serial.println(url);
         httpResponseCode = 0;
       }
+      // store url for next request
+      if (httpResponseCode == HTTP_CODE_OK) {
+        set_data_url(dev, url);
+      }
       // Free resources
       http.end();
       client->stop();
@@ -709,7 +713,7 @@ void send_json(s_device *dev, s_data *mydata) {
         break;
       }
 
-      if ((httpResponseCode == HTTP_CODE_OK) || (j == MAX_REDIR))  {
+      if ((httpResponseCode == HTTP_CODE_OK) || (j == MAX_REDIR)) {
         break;
       }
     }
