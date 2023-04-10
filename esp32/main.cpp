@@ -58,6 +58,7 @@
 #define MAC_2 "d6:ea:13:f5:11:3b"
 #define MAC_3 "fa:45:e3:78:45:ad"
 #define MAC_4 "cc:e0:e7:20:43:85"
+#define URL_PREFIX "https://"
 #define GMT_OFF_SEC 3600
 #define DLT_OFF_SEC 0
 //
@@ -101,8 +102,8 @@ typedef struct {
 /******************************************************************* GLOBALS */
 
 // adjust this part if necessary
-const char *ssid = "xxxxxx";
-const char *password = "xxxxxx";
+const char *ssid = "TPLink-290818";
+const char *password = "82452506";
 const char *ntpServer = "pool.ntp.org";
 
 const char* mozillaApi = "https://location.services.mozilla.com/v1/geolocate?key=test";
@@ -397,7 +398,7 @@ void set_characteristic(s_device *d, const char *s) {
   tmp = (char *)s + base + len + 3;
   len = strlen(s) - len;
 
-  snprintf(d->url, len, "https://%s", tmp);
+  snprintf(d->url, len + strlen(URL_PREFIX), URL_PREFIX"%s", tmp);
 
   return;
 }
@@ -675,7 +676,7 @@ void send_json(s_device *dev, s_data *mydata) {
     const char *headerKeys[] = {"Location"};
     const size_t headerKeysCount = sizeof(headerKeys) / sizeof(headerKeys[0]);
     String httpRequestData = buf;
-    int httpResponseCode;
+    int httpResponseCode = 0;
     int j = 0;
 
     client->setInsecure();
@@ -694,11 +695,13 @@ void send_json(s_device *dev, s_data *mydata) {
         url = (char*)http.header("Location").c_str();
         Serial.print("HTTP Location header: ");
         Serial.println(url);
+        httpResponseCode = 0;
       }
       // Free resources
       http.end();
       client->stop();
       j++;
+      delay(500);
 
       // restart in case heap memory is low
       if (httpResponseCode == -1) {
